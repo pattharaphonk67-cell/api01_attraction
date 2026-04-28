@@ -1,58 +1,52 @@
 const express = require('express');
-const router = express.Router();
-const db = require('../db');
+const cors = require('cors');
+require('dotenv').config();
 
-// 1. API สำหรับดึงข้อมูลทั้งหมดไปแสดงผลใน Flutter App
-router.get('/', async (req, res) => {
+// 🔴 เช็คให้ชัวร์ว่ามึงมีไฟล์ชื่อ db.js อยู่ข้างๆ index.js
+const db = require('./db'); 
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// 🔴 เช็คให้ชัวร์ว่ามึงมีโฟลเดอร์ routes และไฟล์ attractions.js
+const attractionsRouter = require('./routes/attractions');
+app.use('/api/attractions', attractionsRouter);
+app.use('/attractions', attractionsRouter);
+
+app.post('/api/login', async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT * FROM attractions');
-        res.status(200).json(rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+        const { username, password } = req.body;
+        const [users] = await db.query(
+            'SELECT * FROM users WHERE username = ? AND password = ?', 
+            [username, password]
+        );
 
-// 2. API สำหรับสร้างตารางและนำเข้าข้อมูลจาก JSONBin (ดึงข้อมูลสินค้า IT)
-router.get('/init', async (req, res) => {
-    try {
-        // สร้างตารางรองรับข้อมูล (ถ้ายังไม่มี) [cite: 46-47, 114]
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS attractions (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                detail TEXT,
-                coverimage VARCHAR(500),
-                latitude DECIMAL(10,8),
-                longitude DECIMAL(11,8),
-                likes INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-        // ดึงข้อมูลจากลิงก์ JSONBin ของคุณ
-        const response = await fetch('https://api.jsonbin.io/v3/b/69bced0eaa77b81da9ffe42d?meta=false');
-        const data = await response.json();
-
-        // ล้างข้อมูลเก่าออกก่อนเพื่อให้ข้อมูลเป็นปัจจุบัน
-        await db.query('TRUNCATE TABLE attractions');
-
-        // วนลูปนำเข้าข้อมูล โดยแก้ชื่อ Key ให้ตรงกับ JSON (description, imageUrl)
-        for (let item of data) {
-            await db.query(
-                'INSERT INTO attractions (name, detail, coverimage, latitude, longitude) VALUES (?, ?, ?, ?, ?)',
-                [
-                    item.name,
-                    item.description, // แก้ให้ตรงกับ JSON
-                    item.imageUrl,    // แก้ให้ตรงกับ JSON
-                    null,             // สินค้าไม่มีค่าพิกัด
-                    null              // สินค้าไม่มีค่าพิกัด
-                ]
-            );
+        if (users.length > 0) {
+            const user = users[0];
+            res.status(200).json({
+                status: "ok",
+                message: "Login Success",
+                user: {
+                    id: user.id,
+                    fname: user.fname,
+                    lname: user.lname,
+                    username: user.username,
+                    email: user.email,
+                    avatar: user.avatar,
+                    student_id: user.student_id // 🟢 ส่งรหัสนักศึกษาไปหา Flutter
+                }
+            });
+        } else {
+            res.status(401).json({ status: "error", message: "Invalid username or password" });
         }
-        res.status(201).json({ message: "สร้างตารางและนำเข้าข้อมูลจาก JSONBin ลง TiDB สำเร็จ!" });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ status: "error", message: err.message });
     }
 });
 
-module.exports = router;
+app.get('/', (req, res) => {
+    res.send('IT Store API is Online!');
+});
+
+module.exports = app;
