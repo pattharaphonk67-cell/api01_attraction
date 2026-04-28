@@ -41,6 +41,7 @@ app.post('/api/login', async (req, res) => {
                     username: user.username,
                     email: user.email,
                     avatar: user.avatar
+                    student_id: user.student_id // 🟢 เพิ่มบรรทัดนี้ลงไปด้วย!
                 }
             });
         } else {
